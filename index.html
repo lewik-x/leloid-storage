@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leloid Studio - Storage Master Node</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; }
+        body { background-color: #050508; color: #00ff66; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; }
+        
+        .card { width: 100%; max-width: 600px; background: #0d0d12; border: 2px solid #00ff66; padding: 25px; border-radius: 4px; box-shadow: 0 0 20px rgba(0,255,102,0.15); margin-bottom: 20px; }
+        h1 { font-size: 18px; color: #fff; margin-bottom: 12px; text-align: center; border-bottom: 1px dashed #222; padding-bottom: 8px; }
+        p { font-size: 12px; color: #aaa; margin-bottom: 10px; line-height: 1.5; }
+        
+        input { background: #050508; color: #00ff66; border: 1px solid #333; padding: 10px; width: 100%; margin: 6px 0 12px 0; border-radius: 3px; font-size: 13px; }
+        input:focus { border-color: #00ff66; outline: none; }
+        
+        .btn { background: #12121a; color: #00ff66; border: 1px solid #00ff66; padding: 12px; cursor: pointer; font-weight: bold; width: 100%; border-radius: 3px; text-transform: uppercase; font-size: 12px; transition: 0.2s; margin-top: 5px; }
+        .btn:hover { background: #00ff66; color: #050508; box-shadow: 0 0 10px #00ff66; }
+        
+        .btn-anon { border-color: #ffcc00; color: #ffcc00; }
+        .btn-anon:hover { background: #ffcc00; color: #050508; box-shadow: 0 0 10px #ffcc00; }
+
+        .user-card { background: #050508; border: 1px solid #222; padding: 10px; margin-top: 8px; border-radius: 3px; font-size: 11px; }
+        .log-box { background: #000; border: 1px solid #222; padding: 10px; margin-top: 10px; height: 120px; overflow-y: auto; font-size: 10px; color: #00ff66; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>🗄️ LELOID STORAGE NODE</h1>
+        <p>Центральный реестр аккаунтов, паролей и ролей. Клиенты (.apk / .exe) обращаются сюда при первом запуске.</p>
+        
+        <label>Логин аккаунта:</label>
+        <input type="text" id="regUser" placeholder="Введите логин...">
+        
+        <label>Пароль:</label>
+        <input type="password" id="regPass" placeholder="Введите пароль...">
+        
+        <button class="btn" onclick="registerStandardUser()">Зарегистрировать профиль</button>
+        <button class="btn btn-anon" onclick="registerAnonymousUser()">👻 Войти / Создать Анонимно</button>
+    </div>
+
+    <div class="card">
+        <h1>👥 Аккаунты в базе хранилища</h1>
+        <div id="usersList"></div>
+        
+        <h1 style="margin-top:20px;">📡 Журнал запросов от Lilo Client</h1>
+        <div class="log-box" id="logs">Система хранилища запущена. Ожидание внешних подключений...</div>
+    </div>
+
+    <script>
+        // Инициализация базы данных аккаунтов
+        let dbAccounts = JSON.parse(localStorage.getItem('leloid_master_db') || '[]');
+
+        window.onload = () => {
+            renderDB();
+        };
+
+        function log(msg) {
+            let logBox = document.getElementById('logs');
+            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ${msg}<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        // Стандартная регистрация (С автоматической выдачей Админки твоему нику)
+        function registerStandardUser() {
+            let user = document.getElementById('regUser').value.trim();
+            let pass = document.getElementById('regPass').value.trim();
+
+            if (!user || !pass) {
+                alert("Заполните логин и пароль!");
+                return;
+            }
+
+            if (dbAccounts.find(u => u.username.toLowerCase() === user.toLowerCase())) {
+                alert("Ошибка: Логин уже занят!");
+                log(`Отказ: логин '${user}' уже существует.`);
+                return;
+            }
+
+            // ПРОВЕРКА НА АДМИНА/КРЕАТОРА
+            let role = 'USER';
+            if (user.toLowerCase() === 'arslan' || user.toLowerCase() === 'lewik' || pass === 'leloid_creator_777') {
+                role = 'CREATOR';
+            }
+
+            let newAcc = {
+                id: 'peer_' + Math.random().toString(36).substr(2, 9),
+                username: user,
+                password: pass,
+                role: role,
+                isAnonymous: false,
+                level: 1,
+                likes: 0,
+                coins: 100,
+                createdAt: new Date().toLocaleString()
+            };
+
+            dbAccounts.push(newAcc);
+            localStorage.setItem('leloid_master_db', JSON.stringify(dbAccounts));
+
+            log(`Зарегистрирован пользователь: ${user} | Роль: ${role}`);
+            alert(`Успех! Аккаунт ${user} создан. Роль: ${role}`);
+            
+            document.getElementById('regUser').value = '';
+            document.getElementById('regPass').value = '';
+            renderDB();
+        }
+
+        // АНОНИМНАЯ РЕГИСТРАЦИЯ (Случайный ID, срытая почта)
+        function registerAnonymousUser() {
+            let anonCode = Math.floor(Math.random() * 8999) + 1000;
+            let anonUser = `Ghost_${anonCode}`;
+            let anonPass = Math.random().toString(36).substr(2, 8);
+
+            let newAnonAcc = {
+                id: 'peer_anon_' + Math.random().toString(36).substr(2, 9),
+                username: anonUser,
+                password: anonPass,
+                role: 'USER',
+                isAnonymous: true,
+                email: 'hidden@leloid.p2p',
+                level: 1,
+                likes: 0,
+                coins: 100,
+                createdAt: new Date().toLocaleString()
+            };
+
+            dbAccounts.push(newAnonAcc);
+            localStorage.setItem('leloid_master_db', JSON.stringify(dbAccounts));
+
+            log(`Создан анонимный профиль: ${anonUser}`);
+            alert(`👻 Анонимный профиль создан!\nЛогин: ${anonUser}\nПароль: ${anonPass}`);
+            renderDB();
+        }
+
+        function renderDB() {
+            let container = document.getElementById('usersList');
+            if (dbAccounts.length === 0) {
+                container.innerHTML = '<p style="color:#555;">База пока пуста.</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            dbAccounts.forEach(acc => {
+                container.innerHTML += `
+                    <div class="user-card">
+                        <p>👤 Логин: <strong style="color:#fff;">${acc.username}</strong> ${acc.isAnonymous ? '👻 (Аноним)' : ''} | Роль: <strong style="color:#ffcc00;">${acc.role}</strong></p>
+                        <p>PeerID: ${acc.id} | LVL ${acc.level} | Лайки: ${acc.likes}</p>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
+
+
+
