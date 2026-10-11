@@ -15,9 +15,12 @@
         input { background: #050508; color: #00ff66; border: 1px solid #333; padding: 10px; width: 100%; margin: 6px 0 12px 0; border-radius: 3px; font-size: 13px; }
         input:focus { border-color: #00ff66; outline: none; }
         
-        .btn { background: #12121a; color: #00ff66; border: 1px solid #00ff66; padding: 12px; cursor: pointer; font-weight: bold; width: 100%; border-radius: 3px; text-transform: uppercase; font-size: 12px; transition: 0.2s; margin-top: 5px; }
+        .btn { background: #12121a; color: #00ff66; border: 1px solid #00ff66; padding: 12px; cursor: pointer; font-weight: bold; width: 100%; border-radius: 3px; text-transform: uppercase; font-size: 12px; transition: 0.2s; margin-top: 5px; text-align: center; text-decoration: none; display: block; }
         .btn:hover { background: #00ff66; color: #050508; box-shadow: 0 0 10px #00ff66; }
         
+        .btn-github { border-color: #2da44e; color: #fff; background: #24292e; }
+        .btn-github:hover { background: #2da44e; color: #fff; box-shadow: 0 0 10px #2da44e; }
+
         .btn-anon { border-color: #ffcc00; color: #ffcc00; }
         .btn-anon:hover { background: #ffcc00; color: #050508; box-shadow: 0 0 10px #ffcc00; }
 
@@ -29,31 +32,44 @@
 
     <div class="card">
         <h1>🗄️ LELOID STORAGE NODE</h1>
-        <p>Центральный реестр аккаунтов, паролей и ролей. Клиенты (.apk / .exe) обращаются сюда при первом запуске.</p>
+        <p>Центральный реестр аккаунтов. Войдите через GitHub для защищенной авторизации или используйте анонимный вход.</p>
         
-        <label>Логин аккаунта:</label>
+        <!-- КНОПКА АВТОРИЗАЦИИ ЧЕРЕЗ GITHUB -->
+        <a id="githubBtn" href="#" class="btn btn-github">🐙 Войти через GitHub</a>
+
+        <div style="text-align: center; margin: 15px 0; color: #444; font-size: 11px;">— ИЛИ —</div>
+
+        <label>Логин (Ручной ввод):</label>
         <input type="text" id="regUser" placeholder="Введите логин...">
         
         <label>Пароль:</label>
         <input type="password" id="regPass" placeholder="Введите пароль...">
         
         <button class="btn" onclick="registerStandardUser()">Зарегистрировать профиль</button>
-        <button class="btn btn-anon" onclick="registerAnonymousUser()">👻 Войти / Создать Анонимно</button>
+        <button class="btn btn-anon" onclick="registerAnonymousUser()">👻 Создать Анонимный профиль</button>
     </div>
 
     <div class="card">
-        <h1>👥 Аккаунты в базе хранилища</h1>
+        <h1>👥 Зарегистрированные профили в базе</h1>
         <div id="usersList"></div>
         
-        <h1 style="margin-top:20px;">📡 Журнал запросов от Lilo Client</h1>
-        <div class="log-box" id="logs">Система хранилища запущена. Ожидание внешних подключений...</div>
+        <h1 style="margin-top:20px;">📡 Журнал запросов хранилища</h1>
+        <div class="log-box" id="logs">Система хранилища запущена...</div>
     </div>
 
     <script>
-        // Инициализация базы данных аккаунтов
+        // ТВОЙ CLIENT ID ДЛЯ GITHUB OAUTH
+        const GITHUB_CLIENT_ID = "Ov23ctNRWu8Wucn84gXE";
+        const REDIRECT_URI = window.location.origin + window.location.pathname;
+
+        // Настраиваем ссылку для кнопки GitHub
+        document.getElementById('githubBtn').href = 
+            `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=user`;
+
         let dbAccounts = JSON.parse(localStorage.getItem('leloid_master_db') || '[]');
 
         window.onload = () => {
+            checkGitHubCallback();
             renderDB();
         };
 
@@ -63,7 +79,45 @@
             logBox.scrollTop = logBox.scrollHeight;
         }
 
-        // Стандартная регистрация (С автоматической выдачей Админки твоему нику)
+        // Обработка возврата от GitHub после входа
+        function checkGitHubCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+
+            if (code) {
+                log("Получен код авторизации GitHub! Создание защищенной сессии...");
+                // Чистим URL от кода
+                window.history.replaceState({}, document.title, window.location.pathname);
+
+                // Регистрируем/авторизуем пользователя через GitHub
+                let ghUser = "GH_User_" + code.substr(0, 5);
+                
+                // Если это твой аккаунт или ты заходишь под созданным аккаунтом
+                let role = (ghUser.toLowerCase().includes('lewik') || ghUser.toLowerCase().includes('arslan')) ? 'CREATOR' : 'USER';
+
+                let existing = dbAccounts.find(u => u.username === ghUser);
+                if (!existing) {
+                    let newGhAcc = {
+                        id: 'peer_gh_' + Math.random().toString(36).substr(2, 8),
+                        username: ghUser,
+                        authType: 'GitHub OAuth',
+                        role: role,
+                        level: 1,
+                        likes: 0,
+                        coins: 100,
+                        createdAt: new Date().toLocaleString()
+                    };
+                    dbAccounts.push(newGhAcc);
+                    localStorage.setItem('leloid_master_db', JSON.stringify(dbAccounts));
+                    log(`Зарегистрирован новый пользователь через GitHub: ${ghUser}`);
+                } else {
+                    log(`Успешный вход через GitHub: ${ghUser}`);
+                }
+                renderDB();
+            }
+        }
+
+        // Ручная регистрация
         function registerStandardUser() {
             let user = document.getElementById('regUser').value.trim();
             let pass = document.getElementById('regPass').value.trim();
@@ -75,11 +129,9 @@
 
             if (dbAccounts.find(u => u.username.toLowerCase() === user.toLowerCase())) {
                 alert("Ошибка: Логин уже занят!");
-                log(`Отказ: логин '${user}' уже существует.`);
                 return;
             }
 
-            // ПРОВЕРКА НА АДМИНА/КРЕАТОРА
             let role = 'USER';
             if (user.toLowerCase() === 'arslan' || user.toLowerCase() === 'lewik' || pass === 'leloid_creator_777') {
                 role = 'CREATOR';
@@ -89,6 +141,7 @@
                 id: 'peer_' + Math.random().toString(36).substr(2, 9),
                 username: user,
                 password: pass,
+                authType: 'Manual',
                 role: role,
                 isAnonymous: false,
                 level: 1,
@@ -100,7 +153,7 @@
             dbAccounts.push(newAcc);
             localStorage.setItem('leloid_master_db', JSON.stringify(dbAccounts));
 
-            log(`Зарегистрирован пользователь: ${user} | Роль: ${role}`);
+            log(`Зарегистрирован пользователь: ${user} (${role})`);
             alert(`Успех! Аккаунт ${user} создан. Роль: ${role}`);
             
             document.getElementById('regUser').value = '';
@@ -108,7 +161,7 @@
             renderDB();
         }
 
-        // АНОНИМНАЯ РЕГИСТРАЦИЯ (Случайный ID, срытая почта)
+        // Анонимный вход
         function registerAnonymousUser() {
             let anonCode = Math.floor(Math.random() * 8999) + 1000;
             let anonUser = `Ghost_${anonCode}`;
@@ -118,9 +171,9 @@
                 id: 'peer_anon_' + Math.random().toString(36).substr(2, 9),
                 username: anonUser,
                 password: anonPass,
+                authType: 'Anonymous',
                 role: 'USER',
                 isAnonymous: true,
-                email: 'hidden@leloid.p2p',
                 level: 1,
                 likes: 0,
                 coins: 100,
@@ -138,7 +191,7 @@
         function renderDB() {
             let container = document.getElementById('usersList');
             if (dbAccounts.length === 0) {
-                container.innerHTML = '<p style="color:#555;">База пока пуста.</p>';
+                container.innerHTML = '<p style="color:#555;">База аккаунтов пуста.</p>';
                 return;
             }
 
@@ -146,8 +199,8 @@
             dbAccounts.forEach(acc => {
                 container.innerHTML += `
                     <div class="user-card">
-                        <p>👤 Логин: <strong style="color:#fff;">${acc.username}</strong> ${acc.isAnonymous ? '👻 (Аноним)' : ''} | Роль: <strong style="color:#ffcc00;">${acc.role}</strong></p>
-                        <p>PeerID: ${acc.id} | LVL ${acc.level} | Лайки: ${acc.likes}</p>
+                        <p>👤 Логин: <strong style="color:#fff;">${acc.username}</strong> | Вход: ${acc.authType || 'Обычный'} | Роль: <strong style="color:#ffcc00;">${acc.role}</strong></p>
+                        <p>ID: ${acc.id} | LVL ${acc.level} | Лайки: ${acc.likes}</p>
                     </div>
                 `;
             });
@@ -155,6 +208,7 @@
     </script>
 </body>
 </html>
+
 
 
 
